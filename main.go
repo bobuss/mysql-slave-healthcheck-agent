@@ -6,15 +6,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"
 	"strconv"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var (
-	dsn string
-	Version = "0.0.2"
+	dsn                 string
+	Version             = "0.0.4"
 	failSlaveNotRunning bool
 )
 
@@ -24,7 +25,7 @@ func main() {
 	flag.IntVar(&port, "port", 5000, "http listen port number")
 	flag.StringVar(&dsn, "dsn", "root:@tcp(127.0.0.1:3306)/?charset=utf8", "MySQL DSN")
 	flag.BoolVar(&showVersion, "version", false, "show version")
-	flag.BoolVar(&failSlaveNotRunning, "fail-slave-not-ruuning", true, "returns 500 if the slave is not running");
+	flag.BoolVar(&failSlaveNotRunning, "fail-slave-not-ruuning", true, "returns 500 if the slave is not running")
 	flag.Parse()
 	if showVersion {
 		fmt.Printf("version %s\n", Version)
@@ -47,7 +48,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	rows, err := db.Query("SHOW SLAVE STATUS")
+	rows, err := db.Query("SHOW ALL SLAVES STATUS")
 	if err != nil {
 		serverError(w, err)
 		return
