@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	dsn                 string
-	Version             = "0.0.4"
-	failSlaveNotRunning bool
+	dsn           string
+	Version       = "0.0.5"
+	slaveLagLimit int
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 	flag.IntVar(&port, "port", 5000, "http listen port number")
 	flag.StringVar(&dsn, "dsn", "root:@tcp(127.0.0.1:3306)/?charset=utf8", "MySQL DSN")
 	flag.BoolVar(&showVersion, "version", false, "show version")
-	flag.BoolVar(&failSlaveNotRunning, "fail-slave-not-ruuning", true, "returns 500 if the slave is not running")
+	flag.IntVar(&slaveLagLimit, "limit", 5, "Maximum lag limit")
 	flag.Parse()
 	if showVersion {
 		fmt.Printf("version %s\n", Version)
@@ -59,10 +59,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	// カラム数と同じ要素数のsliceを用意して sql.RawBytes のポインタで初期化しておく
 	columns, _ := rows.Columns()
 	values := make([]interface{}, len(columns))
-	for i, _ := range values {
+	for i := range values {
 		var v sql.RawBytes
 		values[i] = &v
 	}
@@ -73,7 +72,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 結果を返す用のmapに値を詰める
 	slaveInfo := make(map[string]interface{})
 	for i, name := range columns {
 		bp := values[i].(*sql.RawBytes)
@@ -85,8 +83,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			slaveInfo[name] = vi
 		}
 	}
-	if failSlaveNotRunning && slaveInfo["Seconds_Behind_Master"] == "" {
-		serverError(w, errors.New("Slave is not running."))
+
+	if slaveInfo["Slave_SQL_Running"] != "Yes" || slaveInfo["Slave_IO_Running"] != "Yes" {
+		serverError(w, errors.New("slave is not running"))
+		return
+	}
+
+	if int(slaveInfo["Seconds_Behind_Master"].(int64)) > slaveLagLimit {
+		serverError(w, errors.New("slave has too much lag"))
 		return
 	}
 
